@@ -25,7 +25,8 @@
 
 (defn set-value-for-key [key value]
   (dosync
-    (alter kv-store update-in [key] (constantly value))))
+    (alter kv-store update-in [key] (constantly value))
+    (count value)))
 
 (defn add-to-kv-store [kv-pairs]
   (doall
@@ -62,15 +63,37 @@
                          (alter kv-store modify-inner-map key field value)
                          new?)))))))
 
+(defn pop-from-list [key list]
+  (case (empty? list)
+    true nil
+    false (do
+            (set-value-for-key key (pop list))
+            (peek list))))
+
 
 (defn lpop [key]
   (dosync
     (let [value-at-key (get-value key)]
       (case (seq? value-at-key)
         false nil
-        true (do
-               (set-value-for-key key (pop value-at-key))
-               (peek value-at-key))))))
+        true (pop-from-list key value-at-key)))))
+
+(defn push-to-list [list item more-items]
+  (let [list+item (conj list item)]
+    (reduce
+      (fn [list element] (conj list element))
+      list+item
+      more-items)))
+
+;  TODO   return size of list after push
+(defn lpush [key item & rest]
+  (dosync
+           (let [value-at-key (get-value key)]
+             (case (nil? value-at-key)
+               true (set-value-for-key key (push-to-list () item rest))
+               false (case (seq? value-at-key)
+                       true (set-value-for-key key (push-to-list value-at-key item rest))
+                       false nil)))))
 
 (defn dump []
   (println "value of KV STORE")
@@ -88,7 +111,7 @@
 
 (defn do-with-random-sleep [func & rest]
   (random-sleep)
-  (apply func rest) )
+  (apply func rest))
 
 (defn -main
   "I don't do a whole lot ... yet."
@@ -98,11 +121,11 @@
   (dump)
 
   (running (quote (add-to-kv-store (list
-                     '("string" "string-value")
-                     (list "list" (apply list (range 1 10)))
-                     (list "map" {"key1" "value1"
-                                  "key2" "value2"
-                                  "key3" "value3"})))))
+                                     '("string" "string-value")
+                                     (list "list" (apply list (range 1 10)))
+                                     (list "map" {"key1" "value1"
+                                                  "key2" "value2"
+                                                  "key3" "value3"})))))
   (add-to-kv-store (list
                      '("string" "string-value")
                      (list "list" (apply list (range 1 10)))
@@ -131,22 +154,27 @@
   (dump)
 
   (running (quote
-             (println (get-value "string"))
-             (println (get-value "list"))
-             (println (get-value "map"))
-             ))
+             (do
+               (println (get-value "string"))
+               (println (get-value "list"))
+               (println (get-value "map"))
+               )
+           ))
 
-  (println (get-value "string"))
-  (println (get-value "list"))
-  (println (get-value "map"))
+  (do
+    (println (get-value "string"))
+    (println (get-value "list"))
+    (println (get-value "map"))
+    )
+
   (println)
   (dump)
 
   (running (quote
-               (let [pop-result (lpop "list")]
-    (println)
-    (println pop-result)
-    (println (get-value "list")))))
+             (let [pop-result (lpop "list")]
+               (println)
+               (println pop-result)
+               (println (get-value "list")))))
 
   (let [pop-result (lpop "list")]
     (println)
@@ -157,16 +185,28 @@
   (dump)
 
   (running (quote
-    (time (wait-futures 1
-                      (lpop "list")
-                      (get-value "list")
-                     (set-value-for-key "foo" "fighters")))))
+             (time (wait-futures 1
+                                 (do-with-random-sleep lpop "list")
+                                 (pprint (do-with-random-sleep get-value "list"))
+                                 (do-with-random-sleep set-value-for-key "foo" "fighters")))
+             ))
 
   (time (wait-futures 1
                       (do-with-random-sleep lpop "list")
                       (pprint (do-with-random-sleep get-value "list"))
                       (do-with-random-sleep set-value-for-key "foo" "fighters")))
 
+  (dump)
+
+  (running (quote
+             (dotimes [_ 8]
+               (println (lpop "list")))
+             ))
+
+  (dotimes [_ 8]
+    (println (lpop "list")))
+
+  (println)
   (dump)
 
   (System/exit 0)
