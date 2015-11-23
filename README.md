@@ -8,9 +8,10 @@ Download from http://example.com/FIXME.
 
 ## Usage
 
-FIXME: explanation
 
-    $ java -jar indigo-0.1.0-standalone.jar [args]
+
+    lein run
+    
 
 ## Options
 
