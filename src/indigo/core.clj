@@ -22,6 +22,10 @@
 (defn get-value [key]
   (get (deref kv-store) key))
 
+(defn value-of [value-expiration]
+  (case (seq? value-expiration)
+    true (first value-expiration)
+    false value-expiration))
 
 (defn set-value-for-key [key value]
   (dosync
@@ -85,7 +89,6 @@
       list+item
       more-items)))
 
-;  TODO   return size of list after push
 (defn lpush [key item & rest]
   (dosync
            (let [value-at-key (get-value key)]
@@ -113,10 +116,25 @@
   (random-sleep)
   (apply func rest))
 
+
+(defn set-random-int [maximum]
+  (let [value (str (rand-int maximum))]
+    (set-value-for-key value value)))
+
+(defn get-random-int [maximum]
+  (let [key (str (rand-int maximum))]
+    (get-value key)))
+
+(defn clear []
+  (running (quote
+             (dosync (ref-set kv-store {}))
+             ))
+  (dosync (ref-set kv-store {}))
+  )
+
 (defn -main
   "I don't do a whole lot ... yet."
   [& args]
-
 
   (dump)
 
@@ -209,7 +227,42 @@
   (println)
   (dump)
 
-  (System/exit 0)
-  )
+  (clear)
+  (running (quote
+             (time (wait-futures 1000
+                                 (dotimes [_ 10] (set-random-int 10000))))
+             ))
+
+  (time (wait-futures 1000
+                    (dotimes [_ 10] (set-random-int 10000))))
+
+  (println (str "kv-store size: " (count @kv-store)))
+
+  (clear)
+
+  (running (quote
+             (time (wait-futures 100
+                                 (dotimes [_ 100] (set-random-int 10000))))
+             ))
+
+  (time (wait-futures 100
+                      (dotimes [_ 100] (set-random-int 10000))))
+
+  (println (str "kv-store size: " (count @kv-store)))
+
+  (clear)
+
+  (running (quote
+             (time (wait-futures 1
+                                 (dotimes [_ 10000] (set-random-int 10000))))
+             ))
+
+  (time (wait-futures 1
+                      (dotimes [_ 10000] (set-random-int 10000))))
+
+  (println (str "kv-store size: " (count @kv-store)))
+
+(System/exit 0)
+)
 
 
